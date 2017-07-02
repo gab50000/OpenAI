@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 import sys
+import pickle
+import logging
 
 import gym
 import torch
@@ -11,6 +13,8 @@ sys.path.append("/home/kabbe/Code/Python/NeuroSimple/")
 
 from neuro_simple.main import FeedForwardNetwork
 
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.DEBUG)
 
 
 # R_t = r_t + gamma * R_{t+1}
@@ -28,37 +32,54 @@ def determine_future_reward(rewards):
 def main():
     input_size, hidden_size, output_size = 4, 10, 2
     
+    max_steps = 1000
+    epochs = 1000
+    
     net = FeedForwardNetwork((input_size, hidden_size, output_size))
     
     env = gym.make('CartPole-v0')
-    env.reset()
 
-    actions = []
-    rewards = []
-    net_outputs = []
+    
+    observables_total = []
+    rewards_total = []
 
-    for step in range(1000):
-        env.render()
-        action = env.action_space.sample()  # take a random action
-        actions.append(action)
-        obs, reward, done, info = env.step(action)
-        print("Step", step, ":", obs, reward, done)
-        if done:
-            reward = -1
-        rewards.append(reward)
-        guess = net.propagate(obs)
-        net_outputs.append(guess)
-        import ipdb; ipdb.set_trace()
-        if done:
-            break
+    for epoch in range(epochs):
+        observables = []
+        actions = []
+        rewards = []
+        net_outputs = []
+        logger.info("Epoch: {}".format(epoch))
+        env.reset()
+        for step in range(1000):
+            env.render()
+            action = env.action_space.sample()  # take a random action
+            obs, reward, done, info = env.step(action)
+            actions.append(action)
+            observables.append(obs)
+            logger.info("Step".format(step))
+            if done:
+                reward = -1
+            rewards.append(reward)
+            guess = net.propagate(obs)
+            net_outputs.append(guess)
+            if done:
+                break
 
-    net_outputs = np.array(net_outputs)
-    future_rewards = determine_future_reward(rewards)
-    guessed_rewards = net_outputs[range(len(net_outputs)), actions]
-    print("Actions:", actions)
-    print("Rewards:", future_rewards)
-    print("Guessed:", guessed_rewards)
-    print("Diffs:", guessed_rewards[:-1] - 0.9 * guessed_rewards[1:])
+        out_arr = np.array(net_outputs)
+        future_rewards = determine_future_reward(rewards)
+        rewards = np.array(rewards)
+        guessed_rewards = out_arr[range(len(out_arr)), actions]
+        delta = guessed_rewards[:-1] - 0.9 * guessed_rewards[1:] - rewards[:-1]
+        logger.debug("Observables: {}".format(observables))
+        logger.debug("Actions: {}".format(actions))
+        logger.debug("Rewards: {}".format(future_rewards))
+        #  print("Guessed:", guessed_rewards)
+        logger.debug("Diffs: {}".format(delta))
+
+        rewards_total.append(delta)
+        
+        with open("data", "wb") as f:
+            pickle.dump({"observables": observables_total, "rewards": rewards_total}, f)
 
 
 if __name__ == "__main__":
