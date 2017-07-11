@@ -3,20 +3,17 @@
 import sys
 import pickle
 import logging
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.DEBUG)
 
 import gym
-import torch
-from torch.autograd import Variable
 import numpy as np
 
 sys.path.append("/home/kabbe/Code/Python/NeuroSimple/")
 
-from neuro_simple.main import FeedForwardNetwork
+from neuro_simple.main import FFNQuadraticSigmoid
 
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG)
-
-
+logging.getLogger("gym").setLevel(logging.WARN)
 # R_t = r_t + gamma * R_{t+1}
 # R_t - gamma * R_{t+1} - r_t = 0
 
@@ -35,7 +32,7 @@ def main():
     max_steps = 1000
     epochs = 1000
     
-    net = FeedForwardNetwork((input_size, hidden_size, output_size))
+    net = FFNQuadraticSigmoid((input_size, hidden_size, output_size))
     
     env = gym.make('CartPole-v0')
 
