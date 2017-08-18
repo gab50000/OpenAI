@@ -19,7 +19,7 @@ def sigmoid():
     W2 = tf.Variable(tf.random_normal([10, 1]), name="W2")
     b2 = tf.Variable(tf.random_normal([1]), name="b2")
     hidden_node = tf.tanh(tf.matmul(input_node, W1) + b1, name="hidden")
-    output_node = tf.tanh(tf.matmul(hidden_node, W2) + b2, name="out")
+    output_node = tf.reduce_sum(tf.matmul(hidden_node, W2) + b2, axis=-1, keep_dims=True)
     y = tf.placeholder(tf.float32, shape=[None, 1])
 
     writer = tf.summary.FileWriter(".", session.graph)
@@ -32,7 +32,7 @@ def sigmoid():
     y_train = np.sin(x_train)
 
     loss = tf.reduce_sum(tf.square(output_node - y))
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.01)
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.001)
     train = optimizer.minimize(loss)
 
     for i in range(1000):
@@ -42,7 +42,9 @@ def sigmoid():
 
     net_out = session.run(output_node, {input_node: x_train})
 
-    plt.plot(x_train, y_train)
+    if np.nan in net_out:
+        raise ValueError("Some weights are None")
+    plt.plot(x_train, y_train, "x")
     plt.plot(x_train, net_out)
     plt.show()
 
