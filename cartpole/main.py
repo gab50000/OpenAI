@@ -8,17 +8,27 @@ logging.basicConfig(level=logging.DEBUG)
 
 import gym
 import numpy as np
+import tensorflow as tf
 
-sys.path.append("/home/kabbe/Code/Python/NeuroSimple/")
-
-from neuro_simple.main import FFNQuadraticSigmoid
 
 logging.getLogger("gym").setLevel(logging.WARN)
+
+
+def NeuralNet(input_size: int, hidden_size: int, output_size: int):
+    input_nodes = tf.placeholder(dtype=tf.float32, shape=[None, input_size], name="input")
+    output_nodes = tf.placeholder(dtype=tf.float32, shape=[None, output_size], name="output")
+    W1 = tf.Variable(tf.random_normal([input_size, hidden_size]))
+    b1 = tf.Variable(tf.random_normal([hidden_size]))
+    W2 = tf.Variable(tf.random_normal([hidden_size, output_size]))
+    b2 = tf.Variable(tf.random_normal([output_size]))
+    hidden = tf.tanh(tf.matmul(input_nodes, W1) + b1, "hidden")
+    net = tf.nn.softmax(tf.matmul(hidden, W2) + b2)
+    return input_nodes, output_nodes, net
+
+
 # R_t = r_t + gamma * R_{t+1}
 # R_t - gamma * R_{t+1} - r_t = 0
-
-def determine_future_reward(rewards):
-    gamma = 0.9
+def determine_future_reward(rewards, *, gamma):
     R_t = np.zeros(len(rewards))
     R_t[-1] = rewards[-1]
     for i in reversed(range(len(rewards) - 1)):
@@ -28,12 +38,15 @@ def determine_future_reward(rewards):
 
 def main():
     input_size, hidden_size, output_size = 4, 10, 2
-    
+    gamma = 0.9
+
     max_steps = 1000
     epochs = 1000
     
-    net = FFNQuadraticSigmoid((input_size, hidden_size, output_size))
-    
+    input_nodes, output_nodes, net = NeuralNet(input_size, hidden_size, output_size)
+    session = tf.InteractiveSession()
+    session.run(tf.global_variables_initializer())
+
     env = gym.make('CartPole-v0')
 
     
@@ -57,16 +70,16 @@ def main():
             if done:
                 reward = -1
             rewards.append(reward)
-            guess = net.propagate(obs)
-            net_outputs.append(guess)
+            guess = session.run(net, {input_nodes: obs[None, :]})
+            net_outputs.append(guess.squeeze())
             if done:
                 break
 
         out_arr = np.array(net_outputs)
-        future_rewards = determine_future_reward(rewards)
+        future_rewards = determine_future_reward(rewards, gamma=gamma)
         rewards = np.array(rewards)
         guessed_rewards = out_arr[range(len(out_arr)), actions]
-        delta = guessed_rewards[:-1] - 0.9 * guessed_rewards[1:] - rewards[:-1]
+        delta = guessed_rewards[:-1] - gamma * guessed_rewards[1:] - rewards[:-1]
         logger.debug("Observables: {}".format(observables))
         logger.debug("Actions: {}".format(actions))
         logger.debug("Rewards: {}".format(future_rewards))
