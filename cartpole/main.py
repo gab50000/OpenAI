@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-import sys
-import pickle
+from functools import reduce
+from operator import add
 import logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -29,8 +29,9 @@ def create_neural_net(input_size: int, hidden_size: int, output_size: int):
     all_q = tf.matmul(hidden, W2) + b2
     predicted_actions = tf.argmax(all_q, axis=1)
     predicted_q = tf.reduce_max(all_q, axis=1)
+    regularizer = reduce(add, (tf.nn.l2_loss(w) for w in (W1, W2, b1, b2)))
 
-    return input_, actual_reward, predicted_q, predicted_actions
+    return input_, actual_reward, predicted_q, predicted_actions, regularizer
 
 
 # R_t = r_t + gamma * R_{t+1}
@@ -47,19 +48,20 @@ def main():
     logfile = open("log.out", "w")
     input_size, hidden_size, output_size = 4, 50, 2
     gamma = 0.9
+    beta = 0.1
 
     max_steps = 1000
     epochs = 1000
 
-    input_, actual_reward, predicted_q, predicted_action = create_neural_net(input_size,
-                                                                             hidden_size,
-                                                                             output_size)
+    input_, actual_reward, predicted_q, predicted_action, regularizer = \
+        create_neural_net(input_size, hidden_size, output_size)
     session = tf.InteractiveSession()
 
-    optimizer = tf.train.AdadeltaOptimizer()
-    loss = tf.reduce_sum(tf.square(predicted_q - gamma * predicted_q - actual_reward))
+    optimizer = tf.train.MomentumOptimizer(0.02, momentum=0.5)
+    loss = tf.reduce_mean(tf.square(predicted_q - gamma * predicted_q - actual_reward))
     #delta = predicted_q - gamma * predicted_q - actual_reward
     #loss = tf.losses.huber_loss(delta, tf.zeros(shape=tf.shape(delta)))
+    loss = tf.reduce_mean(loss + beta * regularizer)
     train = optimizer.minimize(loss)
     session.run(tf.global_variables_initializer())
 
@@ -109,7 +111,8 @@ def main():
         losstmp = session.run(loss, {input_: observables, actual_reward: rewards[:, None]})
         session.run(train, {input_: observables, actual_reward: rewards[:, None]})
         logger.info(f"Loss is {losstmp}")
-        print(f"Loss is {losstmp}", file=logfile, flush=True)
+        #print(f"Loss is {losstmp}", file=logfile, flush=True)
+        print(losstmp, file=logfile, flush=True)
         logger.debug(f"Observables: {observables}")
         logger.debug(f"Actions: {guessed_actions}")
         logger.debug(f"Rewards: {cumulative_rewards}")
