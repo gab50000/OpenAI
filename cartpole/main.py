@@ -15,15 +15,17 @@ logging.getLogger("gym").setLevel(logging.WARN)
 
 
 def NeuralNet(input_size: int, hidden_size: int, output_size: int):
-    input_nodes = tf.placeholder(dtype=tf.float32, shape=[None, input_size], name="input")
-    output_nodes = tf.placeholder(dtype=tf.float32, shape=[None, output_size], name="output")
+    input_ = tf.placeholder(dtype=tf.float32, shape=[None, input_size], name="input")
+    output = tf.placeholder(dtype=tf.float32, shape=[None, output_size], name="output")
     W1 = tf.Variable(tf.random_normal([input_size, hidden_size]))
     b1 = tf.Variable(tf.random_normal([hidden_size]))
     W2 = tf.Variable(tf.random_normal([hidden_size, output_size]))
     b2 = tf.Variable(tf.random_normal([output_size]))
-    hidden = tf.tanh(tf.matmul(input_nodes, W1) + b1, "hidden")
-    net = tf.nn.softmax(tf.matmul(hidden, W2) + b2)
-    return input_nodes, output_nodes, net
+    hidden = tf.tanh(tf.matmul(input_, W1) + b1, "hidden")
+    predicted_q = tf.matmul(hidden, W2) + b2
+    action = tf.argmax(predicted_q, axis=1)
+
+    return input_, output, predicted_q, action
 
 
 # R_t = r_t + gamma * R_{t+1}
@@ -43,7 +45,7 @@ def main():
     max_steps = 1000
     epochs = 1000
     
-    input_nodes, output_nodes, net = NeuralNet(input_size, hidden_size, output_size)
+    input_, output, predicted_q, predicted_action = NeuralNet(input_size, hidden_size, output_size)
     session = tf.InteractiveSession()
     session.run(tf.global_variables_initializer())
 
