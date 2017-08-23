@@ -30,8 +30,9 @@ def create_neural_net(input_size: int, hidden_size: int, output_size: int):
     predicted_actions = tf.argmax(all_q, axis=1)
     predicted_q = tf.reduce_max(all_q, axis=1)
     regularizer = reduce(add, (tf.nn.l2_loss(w) for w in (W1, W2, b1, b2)))
+    weights = {"W1": W1, "W2": W2, "b1": b1, "b2": b2}
 
-    return input_, actual_reward, predicted_q, predicted_actions, regularizer
+    return input_, actual_reward, predicted_q, predicted_actions, regularizer, weights
 
 
 # R_t = r_t + gamma * R_{t+1}
@@ -48,25 +49,26 @@ def main():
     logfile = open("log.out", "w")
     input_size, hidden_size, output_size = 4, 50, 2
     gamma = 0.9
-    beta = 0.1
+    beta = 0.01
 
     max_steps = 1000
     epochs = 1000
+    steps = 10000
 
-    input_, actual_reward, predicted_q, predicted_action, regularizer = \
+    input_, actual_reward, predicted_q, predicted_action, regularizer, weights = \
         create_neural_net(input_size, hidden_size, output_size)
     session = tf.InteractiveSession()
 
     optimizer = tf.train.MomentumOptimizer(0.02, momentum=0.5)
-    loss = tf.reduce_mean(tf.square(predicted_q - gamma * predicted_q - actual_reward))
-    #delta = predicted_q - gamma * predicted_q - actual_reward
-    #loss = tf.losses.huber_loss(delta, tf.zeros(shape=tf.shape(delta)))
+    #loss = tf.reduce_mean(tf.square(predicted_q - gamma * predicted_q - actual_reward))
+    delta = predicted_q - gamma * predicted_q - actual_reward
+    loss = tf.losses.huber_loss(delta, tf.zeros(shape=tf.shape(delta)))
     loss = tf.reduce_mean(loss + beta * regularizer)
+    #loss = tf.reduce_mean(tf.square(predicted_q - actual_reward))
     train = optimizer.minimize(loss)
     session.run(tf.global_variables_initializer())
 
     env = gym.make('CartPole-v0')
-
 
     observables_total = []
     rewards_total = []
@@ -82,7 +84,7 @@ def main():
         env.reset()
         obs = env.observation_space.sample()
         observables.append(obs)
-        for step in range(1000):
+        for step in range(steps):
             if RENDER:
                 env.render()
             gcr, guessed_action = session.run([predicted_q, predicted_action],
@@ -108,9 +110,15 @@ def main():
         #guessed_actions = out_arr[range(len(out_arr)), guessed_actions]
         #rewards_of_chosen_actions = guessed_cumulative_rewards[range(guessed_cumulative_rewards.shape[0]), guessed_actions]
         #delta = rewards_of_chosen_actions[:-1] - gamma * rewards_of_chosen_actions[1:] - rewards[:-1]
-        losstmp = session.run(loss, {input_: observables, actual_reward: rewards[:, None]})
         session.run(train, {input_: observables, actual_reward: rewards[:, None]})
+        losstmp = session.run(loss, {input_: observables, actual_reward:rewards[:, None]})
+        W1 = session.run(weights["W1"])
+        W2 = session.run(weights["W2"])
+        b1 = session.run(weights["b1"])
+        b2 = session.run(weights["b2"])
         logger.info(f"Loss is {losstmp}")
+        if any(np.isnan(x).any() for x in (W1, W2, b1, b2)):
+            import ipdb; ipdb.set_trace()
         #print(f"Loss is {losstmp}", file=logfile, flush=True)
         print(losstmp, file=logfile, flush=True)
         logger.debug(f"Observables: {observables}")
