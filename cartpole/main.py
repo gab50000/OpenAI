@@ -58,6 +58,8 @@ def main():
     input_, actual_reward, predicted_q, predicted_action, regularizer, weights = \
         create_neural_net(input_size, hidden_size, output_size)
     session = tf.InteractiveSession()
+    init = tf.global_variables_initializer()
+    init.run()
 
     optimizer = tf.train.MomentumOptimizer(0.02, momentum=0.5)
     #loss = tf.reduce_mean(tf.square(predicted_q - gamma * predicted_q - actual_reward))
@@ -92,6 +94,7 @@ def main():
             guessed_action = guessed_action[0]
             guessed_cumulative_rewards.append(gcr.squeeze())
             obs, reward, done, info = env.step(guessed_action)
+            print(f"Obs = {obs}")
             guessed_actions.append(guessed_action)
             observables.append(obs)
             logger.info("Step".format(step))
