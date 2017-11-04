@@ -11,28 +11,34 @@ daiquiri.setup(level=daiquiri.logging.DEBUG)
 logger = daiquiri.getLogger(__name__)
 
 
-def Neuro():
-    n_in = 4
-    n_hidden = 3
-    n_out = 2
-    initializer = tf.contrib.layers.variance_scaling_initializer()
-    input_ = tf.placeholder(dtype=tf.float32, shape=[None, n_in])
-    hidden = tf.layers.dense(input_, n_hidden, activation=tf.nn.sigmoid)
-    output = tf.layers.dense(hidden, 2)
-    probs = tf.nn.softmax(output)
-    return input_, probs
+RENDER = False
 
 
-def update_net(net, factor, opt):
-    grads_and_vars = [(factor * sess.run(grad, feed_dict={input_: test_val}), var) 
-                      for grad, var in opt.compute_gradients(net)]
-    opt.apply_gradients(grads_and_vars)
+class Neuro:
+    def __init__(self):
 
+        n_in = 4
+        n_hidden = 3
+        n_out = 2
 
-#  def TrainingOp(optimizer, grad_var_list):
-    #  grad_placeholders = [(tf.placeholder(tf.float32, shape=grad.get_shape()), var)
-                         #  for grad, var in grad_var_list]
-    #  return optimizer.apply_gradients(grad_placeholders)
+        initializer = tf.contrib.layers.variance_scaling_initializer()
+        self.input_ = tf.placeholder(dtype=tf.float32, shape=[None, n_in])
+        hidden = tf.layers.dense(self.input_, n_hidden, activation=tf.nn.sigmoid)
+        self.probs = tf.nn.softmax(tf.layers.dense(hidden, 2))
+        self.gradients = tf.gradients(self.probs[0, 0], tf.trainable_variables())
+
+    def run(self, input_arr):
+        return self.sess.run(self.probs, feed_dict={self.input_: input_arr})
+
+    @property
+    def sess(self):
+        if not hasattr(self, "_sess"):
+            self._sess = tf.get_default_session()
+            return self._sess
+
+    def update_gradients(self, states, actions, scores):
+        grads = self.sess.run(self.gradients, feed_dict={self.input_: states})
+        import ipdb; ipdb.set_trace()
 
 
 def calculate_mean_gradient(states, actions, input_, dp0dW):
@@ -40,10 +46,9 @@ def calculate_mean_gradient(states, actions, input_, dp0dW):
     import ipdb; ipdb.set_trace()
 
 
-def evaluate_game(sess, states, actions, immediate_rewards):
+def evaluate_game(states, actions, immediate_rewards):
     evaluation = []
     dr = discounted_reward(immediate_rewards)
-    dr = (dr - dr.mean()) / dr.var()
     return [(state, action, r) for state, action, r in zip(states, actions, dr)]
 
 
