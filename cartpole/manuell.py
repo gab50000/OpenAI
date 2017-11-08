@@ -34,11 +34,26 @@ class Neuro:
     def sess(self):
         if not hasattr(self, "_sess"):
             self._sess = tf.get_default_session()
-            return self._sess
+        return self._sess
 
     def update_gradients(self, states, actions, scores):
-        grads = self.sess.run(self.gradients, feed_dict={self.input_: states})
-        import ipdb; ipdb.set_trace()
+        scores = np.array(scores)
+        scores = (scores - scores.mean()) / scores.std()
+        training_step = 0.01
+        sess = self.sess
+        logger.debug("Calculating gradients")
+        grads = [sess.run(self.gradients, feed_dict={self.input_: state[None, :]})
+                 for state in states]
+        
+        weights = tf.trainable_variables()
+        logger.debug("Calculating weight updates")
+        for grad, action, score in zip(grads, actions, scores):
+            sign = 1 - (2 * action)
+            weights = [w + sign * np.sign(score) * training_step * g 
+                       for w, g in zip(weights, grad)]
+        logger.debug("Apply weight updates")
+        sess.run([tf.assign(w, update) for w, update in zip(tf.trainable_variables(), weights)])
+        logger.debug("New weights: %s", sess.run(tf.trainable_variables()))
 
 
 def calculate_mean_gradient(states, actions, input_, dp0dW):
@@ -63,6 +78,7 @@ def discounted_reward(immediate_rewards, discount_factor=0.9):
 def main():
     no_of_training_episodes = 10_000
     no_of_training_steps = 1000
+    update_frequency = 100
     reward_gameover = -10
     reward_stillplaying = 1
     neuro = Neuro()
@@ -81,9 +97,9 @@ def main():
         for training_step in range(no_of_training_steps):
             if RENDER:
                 env.render()
-            pos, vel, angle, angle_vel = obs
+            #  pos, vel, angle, angle_vel = obs
             #  step = 1 if angle_vel >= 0 else 0
-            step = random.randrange(0, 2)
+            step = np.argmax(neuro.run(obs[None, :]))
             actions.append(step)
             obs, reward, done, info = env.step(step)
             states.append(obs)
@@ -94,8 +110,10 @@ def main():
                 break
             immediate_rewards.append(reward_stillplaying)
 
-        if training_episode % 100 == 0:
+        if training_episode % update_frequency == 0:
+            logger.info("Average number of training steps: %f", len(evaluations) / update_frequency)
             neuro.update_gradients(*zip(*evaluations))
+            evaluations = []
 
 
 if __name__ == "__main__":
